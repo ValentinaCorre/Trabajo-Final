@@ -1,63 +1,1100 @@
 <!doctype html>
 <html lang="es">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Pronóstico</title>
-<!--
-  ESQUELETO DEL FRONTEND
-  ======================
-  Esta página ya funciona: pide el pronóstico a la API y lo muestra en una
-  tabla sin formato. Tu trabajo es convertirla en una interfaz de verdad.
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sistema de Pronóstico SARIMA</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg-gradient: linear-gradient(135deg, #e0e7ff 0%, #f1f5f9 50%, #e0f2fe 100%);
+      --card: rgba(255, 255, 255, 0.94);
+      --card-solid: #ffffff;
+      --text: #0f172a;
+      --muted: #64748b;
+      --primary: #4f46e5;
+      --primary-hover: #4338ca;
+      --primary-soft: #eef2ff;
+      --forecast: #059669;
+      --border: rgba(203, 213, 225, 0.8);
+      --shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.06), 0 4px 10px -6px rgba(15, 23, 42, 0.04);
+      --table-head: #f8fafc;
+      --table-hover: #f1f5f9;
+      --error-bg: #fef2f2;
+      --error-border: #fca5a5;
+      --error-text: #991b1b;
+    }
 
-  Requisitos mínimos (ver README, Fase 2):
-    1. Una gráfica con el histórico, el pronóstico y el intervalo de confianza.
-    2. Las horas en hora de Colombia (la API las entrega en UTC, con "Z").
-    3. Al menos un indicador destacado (p.ej. valor de la próxima hora,
-       máximo esperado, hora del último dato).
-    4. Controles para elegir cuántas horas pronosticar.
-    5. Un mensaje claro cuando la API responde con error.
+    body.theme-emerald {
+      --bg-gradient: linear-gradient(135deg, #d1fae5 0%, #f0fdf4 50%, #ecfeff 100%);
+      --primary: #0d9488;
+      --primary-hover: #0f766e;
+      --primary-soft: #ccfbf1;
+      --forecast: #2563eb;
+    }
 
-  Puedes usar cualquier librería de gráficas cargada desde un CDN
-  (Chart.js, Plotly, ECharts...) y poner archivos .css o .js en esta misma
-  carpeta: se sirven en /static/<nombre>.
+    body.theme-dark {
+      --bg-gradient: linear-gradient(135deg, #090d16 0%, #111827 55%, #0f172a 100%);
+      --card: rgba(30, 41, 59, 0.88);
+      --card-solid: #1e293b;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --primary: #6366f1;
+      --primary-hover: #818cf8;
+      --primary-soft: rgba(99, 102, 241, 0.22);
+      --forecast: #10b981;
+      --border: rgba(51, 65, 85, 0.85);
+      --shadow: 0 12px 28px -5px rgba(0, 0, 0, 0.4);
+      --table-head: #162032;
+      --table-hover: rgba(51, 65, 85, 0.45);
+      --error-bg: rgba(127, 29, 29, 0.35);
+      --error-border: #ef4444;
+      --error-text: #fecaca;
+    }
 
-  Endpoints disponibles (pruébalos en /docs):
-    GET /api/prediccion?horas=12&historia=48&confianza=0.95
-    GET /api/historico?horas=48
-    GET /api/modelo
-    GET /api/salud
--->
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
+      background: var(--bg-gradient);
+      background-attachment: fixed;
+      color: var(--text);
+      line-height: 1.5;
+      padding: 24px 18px 44px;
+      min-height: 100vh;
+      transition: background 0.3s ease, color 0.3s ease;
+    }
+
+    .container {
+      max-width: 1180px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    /* Barra superior */
+    .topbar {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .status-group {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .pill-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #94a3b8;
+    }
+
+    .dot.online {
+      background: #10b981;
+      box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.25);
+    }
+
+    .dot.offline {
+      background: #ef4444;
+      box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.25);
+    }
+
+    .theme-switcher {
+      display: flex;
+      gap: 6px;
+      background: var(--card);
+      padding: 4px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+    }
+
+    .btn-theme {
+      background: transparent;
+      color: var(--muted);
+      border: none;
+      padding: 6px 11px;
+      border-radius: 8px;
+      font-family: inherit;
+      font-size: 0.78rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.18s;
+    }
+
+    .btn-theme.active {
+      background: var(--primary);
+      color: #ffffff;
+    }
+
+    /* Encabezado y controles */
+    header {
+      background: var(--card);
+      backdrop-filter: blur(12px);
+      padding: 22px 26px;
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .header-top {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .title-group h1 {
+      font-size: 1.55rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .title-group p {
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    .controls-bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding-top: 14px;
+      border-top: 1px solid var(--border);
+    }
+
+    .control-group {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .control-group label {
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--muted);
+    }
+
+    input[type="number"], select {
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      background: var(--card-solid);
+      color: var(--text);
+      border-radius: 10px;
+      font-family: inherit;
+      font-size: 0.88rem;
+      font-weight: 600;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    input[type="number"] {
+      width: 72px;
+      text-align: center;
+    }
+
+    input[type="number"]:focus, select:focus {
+      border-color: var(--primary);
+    }
+
+    .quick-btns {
+      display: flex;
+      gap: 5px;
+    }
+
+    .btn-pill {
+      background: var(--card-solid);
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 7px 10px;
+      border-radius: 9px;
+      font-family: inherit;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .btn-pill:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    .btn-pill.active {
+      background: var(--primary-soft);
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: #ffffff;
+      border: none;
+      padding: 9px 18px;
+      border-radius: 10px;
+      font-family: inherit;
+      font-size: 0.88rem;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25);
+      transition: background 0.15s, transform 0.15s;
+    }
+
+    .btn-primary:hover {
+      background: var(--primary-hover);
+      transform: translateY(-1px);
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .btn-secondary {
+      background: var(--card-solid);
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 7px 12px;
+      border-radius: 9px;
+      font-family: inherit;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s;
+    }
+
+    .btn-secondary:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    /* Alerta de error */
+    .alert-error {
+      display: none;
+      background: var(--error-bg);
+      border: 1px solid var(--error-border);
+      border-left: 5px solid #dc2626;
+      color: var(--error-text);
+      padding: 16px 20px;
+      border-radius: 12px;
+      font-size: 0.92rem;
+      box-shadow: var(--shadow);
+    }
+
+    .alert-error strong {
+      display: block;
+      margin-bottom: 3px;
+      font-size: 0.98rem;
+    }
+
+    /* Tarjetas de indicadores */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px;
+    }
+
+    .kpi-card {
+      background: var(--card);
+      backdrop-filter: blur(12px);
+      padding: 20px 22px;
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      border-top: 4px solid var(--accent, var(--primary));
+      box-shadow: var(--shadow);
+      transition: transform 0.2s ease;
+    }
+
+    .kpi-card:hover {
+      transform: translateY(-3px);
+    }
+
+    .kpi-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .kpi-label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    .kpi-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 9px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--icon-bg, var(--primary-soft));
+      color: var(--accent, var(--primary));
+    }
+
+    .kpi-value-row {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      margin: 8px 0 4px;
+    }
+
+    .kpi-value {
+      font-size: 1.85rem;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      color: var(--text);
+    }
+
+    .trend-badge {
+      font-size: 0.76rem;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 999px;
+    }
+
+    .trend-up {
+      background: rgba(16, 185, 129, 0.15);
+      color: #059669;
+    }
+
+    .trend-down {
+      background: rgba(239, 68, 68, 0.15);
+      color: #dc2626;
+    }
+
+    .kpi-sub {
+      font-size: 0.81rem;
+      color: var(--muted);
+      font-weight: 500;
+    }
+
+    /* Paneles */
+    .panel {
+      background: var(--card);
+      backdrop-filter: blur(12px);
+      padding: 22px 26px;
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+    }
+
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .panel h2 {
+      font-size: 1.12rem;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+
+    .panel-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .chart-wrapper {
+      position: relative;
+      height: 390px;
+      width: 100%;
+    }
+
+    .table-wrapper {
+      overflow-x: auto;
+      max-height: 360px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+      font-variant-numeric: tabular-nums;
+    }
+
+    th, td {
+      padding: 12px 16px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+
+    th {
+      background-color: var(--table-head);
+      font-size: 0.76rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      font-weight: 700;
+      color: var(--muted);
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+
+    tbody tr:last-child td {
+      border-bottom: none;
+    }
+
+    tbody tr:hover td {
+      background-color: var(--table-hover);
+    }
+
+    .val-pred {
+      color: var(--forecast);
+      font-weight: 700;
+    }
+
+    /* Ficha técnica del modelo */
+    .model-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+    }
+
+    .model-item {
+      background: var(--table-head);
+      border: 1px solid var(--border);
+      padding: 12px 14px;
+      border-radius: 10px;
+    }
+
+    .model-item-key {
+      font-size: 0.74rem;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-weight: 700;
+      letter-spacing: 0.04em;
+    }
+
+    .model-item-val {
+      font-size: 0.95rem;
+      font-weight: 700;
+      margin-top: 3px;
+      word-break: break-word;
+    }
+  </style>
 </head>
 <body>
-  <h1>Pronóstico</h1>
-  <p id="estado">Consultando la API…</p>
-  <table border="1" cellpadding="4">
-    <thead><tr><th>tiempo (UTC)</th><th>prediccion</th><th>limite_inferior</th><th>limite_superior</th></tr></thead>
-    <tbody id="filas"></tbody>
-  </table>
+  <div class="container">
+    <!-- Barra superior de estado y temas -->
+    <div class="topbar">
+      <div class="status-group">
+        <span class="pill-badge">
+          <span id="status-dot" class="dot"></span>
+          <span id="status-text">Verificando API...</span>
+        </span>
+        <span class="pill-badge" id="badge-modo">Modo: Cargando...</span>
+        <span class="pill-badge">🇨🇴 Hora Colombia (COT / UTC-5)</span>
+      </div>
 
-<script>
-async function cargar() {
-  const estado = document.getElementById("estado");
-  try {
-    const respuesta = await fetch("/api/prediccion?horas=12&historia=48");
-    const datos = await respuesta.json();
-    if (!respuesta.ok) throw new Error(datos.detail);
+      <div class="theme-switcher" role="group" aria-label="Selector de tema">
+        <button type="button" class="btn-theme active" data-theme="default" onclick="cambiarTema('default', this)">Índigo</button>
+        <button type="button" class="btn-theme" data-theme="emerald" onclick="cambiarTema('emerald', this)">Esmeralda</button>
+        <button type="button" class="btn-theme" data-theme="dark" onclick="cambiarTema('dark', this)">Oscuro</button>
+      </div>
+    </div>
 
-    // datos.historico  -> [{tiempo, valor}, ...]            (horas pasadas)
-    // datos.prediccion -> [{tiempo, prediccion, limite_inferior, limite_superior}, ...]
-    console.log(datos);   // abre la consola del navegador (F12) para explorarlo
+    <!-- Encabezado y controles -->
+    <header>
+      <div class="header-top">
+        <div class="title-group">
+          <h1>Panel de Pronóstico de Series Temporales</h1>
+          <p>Visualización interactiva del modelo SARIMA con intervalos de confianza y conversión horaria local</p>
+        </div>
+        <button type="button" id="btn-actualizar" class="btn-primary" onclick="cargar()">Actualizar Pronóstico</button>
+      </div>
 
-    document.getElementById("filas").innerHTML = datos.prediccion.map(p =>
-      `<tr><td>${p.tiempo}</td><td>${p.prediccion}</td><td>${p.limite_inferior}</td><td>${p.limite_superior}</td></tr>`
-    ).join("");
-    estado.textContent = `Último dato real: ${datos.ultima_observacion}`;
-  } catch (error) {
-    estado.textContent = "Error: " + error.message;
-  }
-}
-cargar();
-</script>
+      <div class="controls-bar">
+        <div class="control-group">
+          <label for="input-horas">Horas a pronosticar:</label>
+          <input type="number" id="input-horas" value="12" min="1" max="168">
+          <div class="quick-btns">
+            <button type="button" class="btn-pill" data-horas="6" onclick="seleccionarHoras(6)">6h</button>
+            <button type="button" class="btn-pill active" data-horas="12" onclick="seleccionarHoras(12)">12h</button>
+            <button type="button" class="btn-pill" data-horas="24" onclick="seleccionarHoras(24)">24h</button>
+            <button type="button" class="btn-pill" data-horas="48" onclick="seleccionarHoras(48)">48h</button>
+            <button type="button" class="btn-pill" data-horas="72" onclick="seleccionarHoras(72)">72h</button>
+          </div>
+        </div>
+
+        <div class="control-group">
+          <label for="select-historia">Histórico:</label>
+          <select id="select-historia" onchange="cargar()">
+            <option value="24">Últimas 24h</option>
+            <option value="48" selected>Últimas 48h</option>
+            <option value="72">Últimas 72h</option>
+            <option value="168">Última semana (168h)</option>
+          </select>
+
+          <label for="select-confianza">Confianza:</label>
+          <select id="select-confianza" onchange="cargar()">
+            <option value="0.80">80%</option>
+            <option value="0.90">90%</option>
+            <option value="0.95" selected>95%</option>
+            <option value="0.99">99%</option>
+          </select>
+        </div>
+      </div>
+    </header>
+
+    <!-- Mensaje claro de error -->
+    <div id="caja-error" class="alert-error" role="alert">
+      <strong>No se pudo completar la consulta a la API</strong>
+      <span id="texto-error"></span>
+    </div>
+
+    <!-- Indicadores destacados -->
+    <section class="kpi-grid">
+      <div class="kpi-card" style="--accent: #10b981; --icon-bg: rgba(16, 185, 129, 0.14);">
+        <div class="kpi-header">
+          <span class="kpi-label">Próxima hora esperada</span>
+          <div class="kpi-icon">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </div>
+        </div>
+        <div class="kpi-value-row">
+          <div class="kpi-value" id="kpi-proxima">—</div>
+          <span id="kpi-tendencia" class="trend-badge" style="display:none;"></span>
+        </div>
+        <div class="kpi-sub" id="kpi-proxima-hora">Calculando...</div>
+      </div>
+
+      <div class="kpi-card" style="--accent: #f59e0b; --icon-bg: rgba(245, 158, 11, 0.14);">
+        <div class="kpi-header">
+          <span class="kpi-label">Máximo pronosticado</span>
+          <div class="kpi-icon">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+          </div>
+        </div>
+        <div class="kpi-value-row">
+          <div class="kpi-value" id="kpi-maximo">—</div>
+        </div>
+        <div class="kpi-sub" id="kpi-maximo-hora">—</div>
+      </div>
+
+      <div class="kpi-card" style="--accent: #06b6d4; --icon-bg: rgba(6, 182, 212, 0.14);">
+        <div class="kpi-header">
+          <span class="kpi-label">Mínimo pronosticado</span>
+          <div class="kpi-icon">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/></svg>
+          </div>
+        </div>
+        <div class="kpi-value-row">
+          <div class="kpi-value" id="kpi-minimo">—</div>
+        </div>
+        <div class="kpi-sub" id="kpi-minimo-hora">—</div>
+      </div>
+
+      <div class="kpi-card" style="--accent: #6366f1; --icon-bg: rgba(99, 102, 241, 0.14);">
+        <div class="kpi-header">
+          <span class="kpi-label">Último dato real</span>
+          <div class="kpi-icon">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          </div>
+        </div>
+        <div class="kpi-value-row">
+          <div class="kpi-value" id="kpi-ultimo-valor">—</div>
+        </div>
+        <div class="kpi-sub" id="kpi-ultima-hora">—</div>
+      </div>
+    </section>
+
+    <!-- Gráfica principal -->
+    <section class="panel">
+      <div class="panel-header">
+        <h2 id="titulo-grafica">Histórico y Pronóstico (Intervalo de Confianza 95%)</h2>
+        <div class="panel-actions">
+          <button type="button" class="btn-secondary" id="btn-tipo-grafica" onclick="alternarTipoGrafica()">📊 Ver como Barras</button>
+          <button type="button" class="btn-secondary" onclick="descargarPNG()">🖼️ Guardar Gráfica</button>
+        </div>
+      </div>
+      <div class="chart-wrapper">
+        <canvas id="graficaPronostico"></canvas>
+      </div>
+    </section>
+
+    <!-- Tabla detallada -->
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Detalle numérico del pronóstico (Hora Colombia)</h2>
+        <div class="panel-actions">
+          <button type="button" class="btn-secondary" onclick="exportarCSV()">📥 Descargar CSV (Excel)</button>
+        </div>
+      </div>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Fecha y Hora (Colombia)</th>
+              <th>Predicción</th>
+              <th id="th-inf">Límite Inferior (95%)</th>
+              <th id="th-sup">Límite Superior (95%)</th>
+              <th>Amplitud Intervalo</th>
+            </tr>
+          </thead>
+          <tbody id="filas"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Ficha técnica del modelo (/api/modelo) -->
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Especificaciones del Modelo Activo</h2>
+        <span style="font-size: 0.8rem; color: var(--muted);">Información consultada desde /api/modelo</span>
+      </div>
+      <div class="model-grid" id="info-modelo">
+        <div class="model-item">
+          <div class="model-item-key">Estado</div>
+          <div class="model-item-val">Cargando parámetros del modelo...</div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    let grafica = null;
+    let tipoGrafica = "line";
+    let datosHistoricoCache = [];
+    let datosPrediccionCache = [];
+
+    function formatearHoraColombia(isoUTC, incluirAnio = true) {
+      if (!isoUTC) return "—";
+      const fecha = new Date(isoUTC);
+      if (isNaN(fecha.getTime())) return isoUTC;
+
+      const opciones = {
+        timeZone: "America/Bogota",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        hourCycle: "h23"
+      };
+      if (incluirAnio) {
+        opciones.year = "numeric";
+      }
+      return new Intl.DateTimeFormat("es-CO", opciones).format(fecha);
+    }
+
+    function actualizarBotonesActivos(cantidad) {
+      document.querySelectorAll(".btn-pill").forEach(btn => {
+        btn.classList.toggle("active", Number(btn.dataset.horas) === Number(cantidad));
+      });
+    }
+
+    function seleccionarHoras(cantidad) {
+      document.getElementById("input-horas").value = cantidad;
+      actualizarBotonesActivos(cantidad);
+      cargar();
+    }
+
+    function cambiarTema(tema, boton) {
+      document.body.classList.remove("theme-emerald", "theme-dark");
+      if (tema === "emerald") document.body.classList.add("theme-emerald");
+      if (tema === "dark") document.body.classList.add("theme-dark");
+
+      document.querySelectorAll(".btn-theme").forEach(b => b.classList.remove("active"));
+      if (boton) boton.classList.add("active");
+
+      if (datosHistoricoCache.length > 0 || datosPrediccionCache.length > 0) {
+        dibujarGrafica(datosHistoricoCache, datosPrediccionCache);
+      }
+    }
+
+    function alternarTipoGrafica() {
+      tipoGrafica = tipoGrafica === "line" ? "bar" : "line";
+      document.getElementById("btn-tipo-grafica").textContent =
+        tipoGrafica === "line" ? "📊 Ver como Barras" : "📈 Ver como Líneas";
+      if (datosHistoricoCache.length > 0 || datosPrediccionCache.length > 0) {
+        dibujarGrafica(datosHistoricoCache, datosPrediccionCache);
+      }
+    }
+
+    function descargarPNG() {
+      if (!grafica) return;
+      const enlace = document.createElement("a");
+      enlace.href = grafica.toBase64Image();
+      enlace.download = "pronostico_serie_temporal.png";
+      enlace.click();
+    }
+
+    function exportarCSV() {
+      if (!datosPrediccionCache.length) return;
+      const pct = Math.round(Number(document.getElementById("select-confianza").value) * 100);
+      const encabezados = [
+        "Fecha_Hora_Colombia",
+        "Tiempo_UTC",
+        "Prediccion",
+        `Limite_Inferior_${pct}%`,
+        `Limite_Superior_${pct}%`
+      ];
+      const filas = datosPrediccionCache.map(p => [
+        `"${formatearHoraColombia(p.tiempo)} COT"`,
+        p.tiempo,
+        Number(p.prediccion).toFixed(4),
+        Number(p.limite_inferior).toFixed(4),
+        Number(p.limite_superior).toFixed(4)
+      ].join(","));
+
+      const contenido = "\uFEFF" + [encabezados.join(","), ...filas].join("\n");
+      const blob = new Blob([contenido], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const enlace = document.createElement("a");
+      enlace.href = url;
+      enlace.download = "pronostico_colombia.csv";
+      enlace.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function mostrarError(mensaje) {
+      const caja = document.getElementById("caja-error");
+      document.getElementById("texto-error").textContent = mensaje;
+      caja.style.display = "block";
+    }
+
+    function ocultarError() {
+      document.getElementById("caja-error").style.display = "none";
+    }
+
+    function actualizarIndicadores(historico, prediccion, ultimaObservacion) {
+      const ultimoHist = historico.length > 0 ? historico[historico.length - 1] : null;
+      document.getElementById("kpi-ultimo-valor").textContent =
+        ultimoHist ? Number(ultimoHist.valor).toFixed(2) : "N/D";
+      document.getElementById("kpi-ultima-hora").textContent =
+        formatearHoraColombia(ultimaObservacion) + " COT";
+
+      if (prediccion.length > 0) {
+        const primera = prediccion[0];
+        const valProx = Number(primera.prediccion);
+        document.getElementById("kpi-proxima").textContent = valProx.toFixed(2);
+        document.getElementById("kpi-proxima-hora").textContent =
+          formatearHoraColombia(primera.tiempo) + " COT";
+
+        const badgeTend = document.getElementById("kpi-tendencia");
+        if (ultimoHist && Number(ultimoHist.valor) !== 0) {
+          const diff = valProx - Number(ultimoHist.valor);
+          const pct = (diff / Math.abs(Number(ultimoHist.valor))) * 100;
+          const sube = diff >= 0;
+          badgeTend.style.display = "inline-block";
+          badgeTend.className = "trend-badge " + (sube ? "trend-up" : "trend-down");
+          badgeTend.textContent = `${sube ? "▲ +" : "▼ "}${diff.toFixed(2)} (${pct.toFixed(1)}%)`;
+        } else {
+          badgeTend.style.display = "none";
+        }
+
+        let maxItem = prediccion[0];
+        let minItem = prediccion[0];
+        for (const p of prediccion) {
+          if (p.prediccion > maxItem.prediccion) maxItem = p;
+          if (p.prediccion < minItem.prediccion) minItem = p;
+        }
+
+        document.getElementById("kpi-maximo").textContent = Number(maxItem.prediccion).toFixed(2);
+        document.getElementById("kpi-maximo-hora").textContent =
+          "A las " + formatearHoraColombia(maxItem.tiempo, false) + " COT";
+
+        document.getElementById("kpi-minimo").textContent = Number(minItem.prediccion).toFixed(2);
+        document.getElementById("kpi-minimo-hora").textContent =
+          "A las " + formatearHoraColombia(minItem.tiempo, false) + " COT";
+      }
+    }
+
+    function dibujarGrafica(historico, prediccion) {
+      const ctx = document.getElementById("graficaPronostico").getContext("2d");
+      const esOscuro = document.body.classList.contains("theme-dark");
+      const esEsmeralda = document.body.classList.contains("theme-emerald");
+      const pct = Math.round(Number(document.getElementById("select-confianza").value) * 100);
+
+      const colorTexto = esOscuro ? "#cbd5e1" : "#475569";
+      const colorRejilla = esOscuro ? "rgba(148, 163, 184, 0.12)" : "rgba(148, 163, 184, 0.22)";
+      const colorHist = esOscuro ? "#818cf8" : (esEsmeralda ? "#0d9488" : "#4f46e5");
+      const colorPred = esOscuro ? "#34d399" : (esEsmeralda ? "#2563eb" : "#059669");
+
+      const gradienteHist = ctx.createLinearGradient(0, 0, 0, 360);
+      gradienteHist.addColorStop(0, esOscuro ? "rgba(129, 140, 248, 0.28)" : "rgba(79, 70, 229, 0.18)");
+      gradienteHist.addColorStop(1, "rgba(79, 70, 229, 0.0)");
+
+      const etiquetasHist = historico.map(h => formatearHoraColombia(h.tiempo, false));
+      const etiquetasPred = prediccion.map(p => formatearHoraColombia(p.tiempo, false));
+      const etiquetas = [...etiquetasHist, ...etiquetasPred];
+
+      const nHist = historico.length;
+      const nPred = prediccion.length;
+
+      const serieHistorico = [
+        ...historico.map(h => h.valor),
+        ...Array(nPred).fill(null)
+      ];
+
+      const esLinea = tipoGrafica === "line";
+      const ultimoValor = (esLinea && nHist > 0) ? historico[nHist - 1].valor : null;
+      const rellenoPrevio = (esLinea && nHist > 0) ? Array(nHist - 1).fill(null) : Array(nHist).fill(null);
+      const puntoUnion = (esLinea && nHist > 0) ? [ultimoValor] : [];
+
+      const seriePronostico = [
+        ...rellenoPrevio,
+        ...puntoUnion,
+        ...prediccion.map(p => p.prediccion)
+      ];
+
+      const datasets = [
+        {
+          label: "Histórico",
+          data: serieHistorico,
+          borderColor: colorHist,
+          backgroundColor: esLinea ? gradienteHist : colorHist,
+          fill: esLinea,
+          borderWidth: 2.5,
+          pointRadius: 2.2,
+          pointHoverRadius: 5,
+          tension: 0.3
+        },
+        {
+          label: "Pronóstico",
+          data: seriePronostico,
+          borderColor: colorPred,
+          backgroundColor: colorPred,
+          borderDash: esLinea ? [6, 4] : [],
+          borderWidth: 2.8,
+          pointRadius: 3.5,
+          pointHoverRadius: 6,
+          tension: 0.3
+        }
+      ];
+
+      if (esLinea) {
+        datasets.push(
+          {
+            label: `Límite Superior (${pct}%)`,
+            data: [...rellenoPrevio, ...puntoUnion, ...prediccion.map(p => p.limite_superior)],
+            borderColor: "rgba(16, 185, 129, 0.25)",
+            backgroundColor: esOscuro ? "rgba(16, 185, 129, 0.18)" : "rgba(16, 185, 129, 0.14)",
+            borderWidth: 1,
+            pointRadius: 0,
+            fill: "+1",
+            tension: 0.3
+          },
+          {
+            label: `Límite Inferior (${pct}%)`,
+            data: [...rellenoPrevio, ...puntoUnion, ...prediccion.map(p => p.limite_inferior)],
+            borderColor: "rgba(16, 185, 129, 0.25)",
+            backgroundColor: "transparent",
+            borderWidth: 1,
+            pointRadius: 0,
+            fill: false,
+            tension: 0.3
+          }
+        );
+      }
+
+      if (grafica) {
+        grafica.destroy();
+      }
+
+      grafica = new Chart(ctx, {
+        type: tipoGrafica,
+        data: { labels: etiquetas, datasets },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: "index", intersect: false },
+          plugins: {
+            legend: {
+              position: "top",
+              labels: {
+                color: colorTexto,
+                usePointStyle: true,
+                padding: 16,
+                font: { family: "Plus Jakarta Sans", weight: "600" }
+              }
+            },
+            tooltip: {
+              backgroundColor: "rgba(15, 23, 42, 0.92)",
+              padding: 12,
+              cornerRadius: 10,
+              callbacks: {
+                title: (items) => `Hora Colombia: ${items[0].label} COT`
+              }
+            }
+          },
+          scales: {
+            x: {
+              grid: { color: colorRejilla },
+              ticks: { color: colorTexto, maxTicksLimit: 14 },
+              title: {
+                display: true,
+                text: "Fecha y Hora (Colombia - COT)",
+                color: colorTexto,
+                font: { weight: "600" }
+              }
+            },
+            y: {
+              grid: { color: colorRejilla },
+              ticks: { color: colorTexto },
+              title: {
+                display: true,
+                text: "Valor de la serie",
+                color: colorTexto,
+                font: { weight: "600" }
+              }
+            }
+          }
+        }
+      });
+    }
+
+    async function cargarMetadata() {
+      try {
+        const resSalud = await fetch("/api/salud");
+        if (resSalud.ok) {
+          const salud = await resSalud.json();
+          document.getElementById("status-dot").className = "dot online";
+          document.getElementById("status-text").textContent = "API Conectada";
+          const esDemo = salud.demo_mode === true || salud.modo === "demo";
+          document.getElementById("badge-modo").textContent =
+            esDemo ? "Modo: Demostración" : "Modo: Modelo Real";
+        }
+      } catch (_) {
+        document.getElementById("status-dot").className = "dot offline";
+        document.getElementById("status-text").textContent = "API Sin conexión";
+      }
+
+      try {
+        const resModelo = await fetch("/api/modelo");
+        if (resModelo.ok) {
+          const modelo = await resModelo.json();
+          const contenedor = document.getElementById("info-modelo");
+          const entradas = Object.entries(modelo).filter(([_, v]) => v !== null && typeof v !== "object" || Array.isArray(v));
+          if (entradas.length > 0) {
+            contenedor.innerHTML = entradas.map(([clave, valor]) => `
+              <div class="model-item">
+                <div class="model-item-key">${clave.replace(/_/g, " ")}</div>
+                <div class="model-item-val">${Array.isArray(valor) ? `(${valor.join(", ")})` : valor}</div>
+              </div>
+            `).join("");
+          }
+        }
+      } catch (_) {}
+    }
+
+    async function cargar() {
+      const btn = document.getElementById("btn-actualizar");
+      const inputHoras = document.getElementById("input-horas");
+      const horas = parseInt(inputHoras.value, 10);
+      const historia = document.getElementById("select-historia").value;
+      const confianza = document.getElementById("select-confianza").value;
+      const pct = Math.round(Number(confianza) * 100);
+
+      actualizarBotonesActivos(horas);
+
+      if (isNaN(horas) || horas < 1 || horas > 168) {
+        mostrarError("Ingresa un número válido de horas entre 1 y 168.");
+        return;
+      }
+
+      ocultarError();
+      btn.disabled = true;
+      btn.textContent = "Cargando...";
+
+      document.getElementById("titulo-grafica").textContent =
+        `Histórico (${historia}h) y Pronóstico (${horas}h) — Intervalo de Confianza ${pct}%`;
+      document.getElementById("th-inf").textContent = `Límite Inferior (${pct}%)`;
+      document.getElementById("th-sup").textContent = `Límite Superior (${pct}%)`;
+
+      try {
+        const respuesta = await fetch(`/api/prediccion?horas=${horas}&historia=${historia}&confianza=${confianza}`);
+        const datos = await respuesta.json().catch(() => ({}));
+
+        if (!respuesta.ok) {
+          const detalle = Array.isArray(datos.detail)
+            ? datos.detail.map(e => e.msg).join(", ")
+            : (datos.detail || `Error HTTP ${respuesta.status} al consultar el servidor.`);
+          throw new Error(detalle);
+        }
+
+        datosHistoricoCache = datos.historico || [];
+        datosPrediccionCache = datos.prediccion || [];
+
+        actualizarIndicadores(datosHistoricoCache, datosPrediccionCache, datos.ultima_observacion);
+        dibujarGrafica(datosHistoricoCache, datosPrediccionCache);
+
+        document.getElementById("filas").innerHTML = datosPrediccionCache.map(p => {
+          const inf = Number(p.limite_inferior);
+          const sup = Number(p.limite_superior);
+          const rango = (sup - inf).toFixed(4);
+          return `
+            <tr>
+              <td>${formatearHoraColombia(p.tiempo)} COT</td>
+              <td class="val-pred">${Number(p.prediccion).toFixed(4)}</td>
+              <td>${inf.toFixed(4)}</td>
+              <td>${sup.toFixed(4)}</td>
+              <td>± ${(Number(rango) / 2).toFixed(4)}</td>
+            </tr>
+          `;
+        }).join("");
+      } catch (error) {
+        mostrarError(error.message || "No se pudo establecer conexión con la API.");
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Actualizar Pronóstico";
+      }
+    }
+
+    document.getElementById("input-horas").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") cargar();
+    });
+
+    cargarMetadata();
+    cargar();
+  </script>
 </body>
 </html>

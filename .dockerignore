@@ -1,0 +1,14 @@
+.env
+.env.*
+.git
+.gitignore
+.devcontainer
+notebooks
+scripts
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+pruebas.http
+README.md
+
